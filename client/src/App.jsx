@@ -343,7 +343,7 @@ function App() {
       <div className="min-h-screen bg-zinc-950 text-white flex flex-col items-center justify-center gap-6">
         <h1 className="text-4xl">Join Online Room</h1>
         <div className="flex gap-2">
-          <input value={roomId} onChange={(e) => setRoomId(e.target.value)} className="p-2 rounded text-black" />
+          <input value={roomId} onChange={(e) => setRoomId(e.target.value)} className="p-2 rounded text-red-400" />
           <button onClick={() => {
             // ensure socket connection established
             if (!socketRef.current) {
