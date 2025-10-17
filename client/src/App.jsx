@@ -8,7 +8,7 @@ import "./index.css";
 import { io } from "socket.io-client";
 
 // CHANGE URL if your server runs elsewhere
-const SOCKET_URL = "http://localhost:3000";
+const SOCKET_URL ="https://valo-card-game-server.onrender.com/" || "http://localhost:3000";
 
 function App() {
   // AUDIO (kept same)

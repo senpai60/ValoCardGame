@@ -8,7 +8,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:5173", // Vite dev server origin
+    origin: process.env.CORS_ORIGIN || "http://localhost:5173", // Fallback for local dev
     methods: ["GET", "POST"]
   }
 });
