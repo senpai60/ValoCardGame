@@ -33,6 +33,7 @@ function App() {
   const [roundResultLocal, setRoundResultLocal] = useState("");
   const [gameStateLocal, setGameStateLocal] = useState("pre-game"); // pre-game, playing, round-end, game-over
   const [winStreak, setWinStreak] = useState(0);
+  const winStreakRef = useRef(winStreak);
 
   // multiplayer state
   const socketRef = useRef(null);
@@ -49,6 +50,11 @@ function App() {
   // flags
   const [isMusicPlaying, setIsMusicPlaying] = useState(true);
   const [mode, setMode] = useState("idle"); // "idle" | "solo" | "online" | "waiting"
+
+  // keep refs in sync to avoid stale closures inside socket handlers
+  const isMusicPlayingRef = useRef(isMusicPlaying);
+  useEffect(() => { isMusicPlayingRef.current = isMusicPlaying; }, [isMusicPlaying]);
+  useEffect(() => { winStreakRef.current = winStreak; }, [winStreak]);
 
   // connect socket once when user chooses online mode
   // connect socket once when user chooses online mode
@@ -105,12 +111,54 @@ function App() {
       });
 
       socket.on("roundResult", (data) => {
+        // update decks and UI state immediately
         setCardsMap(data.cards || {});
         setTurnId(data.turn);
         setRoundInfo(data);
-        setSelectedStat(null);
+        // show chosen stat so cards highlight
+        setSelectedStat(data.statKey || null);
         setCardsLeft(data.cardsLeft || {});
-        console.log("RoundResult:", data);
+
+        console.log("--- Round Result Received ---", data);
+        const currentSocketId = socketRef.current ? socketRef.current.id : null;
+        if (!currentSocketId) { console.error("Socket ID missing! Skipping result handling."); return; }
+
+        const isDraw = data.result === "draw";
+        if (isDraw) {
+          // show draw briefly then clear UI
+          setTimeout(() => {
+            setRoundInfo(null);
+            setSelectedStat(null);
+          }, 1500);
+          return;
+        }
+
+        const statChooserWon = data.result === "player"; // server uses 'player' when chooser won
+        const statChooserWasMe = data.playerId === currentSocketId;
+        const iWon = (statChooserWasMe && statChooserWon) || (!statChooserWasMe && !statChooserWon);
+        const iLost = (statChooserWasMe && !statChooserWon) || (!statChooserWasMe && statChooserWon);
+
+        // play sounds using refs/functional updates to avoid stale values
+        if (iWon) {
+          setWinStreak((prev) => {
+            const next = prev + 1;
+            winStreakRef.current = next;
+            playWinStreakSound(next);
+            return next;
+          });
+        } else if (iLost) {
+          if (isMusicPlayingRef.current) {
+            lostSound.play().catch(() => {});
+          }
+          setWinStreak(0);
+          winStreakRef.current = 0;
+        }
+
+        // keep round highlight visible, then clear
+        setTimeout(() => {
+          setRoundInfo(null);
+          setSelectedStat(null);
+        }, 1500);
       });
 
       socket.on("gameOver", (data) => {
@@ -250,25 +298,31 @@ function App() {
   const oppId = mode === "solo" ? "AI" : Object.keys(cardsMap).find((id) => id !== myId);
   const oppCards = mode === "solo" ? aiCardsLocal : cardsMap[oppId] || [];
 
-  // Win streak sound (reuse)
-  useEffect(() => {
-    if (winStreak === 0) return;
+ 
+
+  const toggleMusic = () => setIsMusicPlaying((s) => !s);
+
+  const playWinStreakSound = (streak) => {
+    if (!isMusicPlayingRef.current) return; // Mute check using ref
+
+    const currentStreak = streak; // Use the streak passed to the function
+    if (currentStreak === 0) return; // Agar streak 0 hai toh kuch mat karo
+
     const allShots = [shot1, shot2, shot3, shot4, shot5];
     allShots.forEach((s) => {
       s.pause();
       s.currentTime = 0;
     });
-    switch (winStreak) {
+
+    switch (currentStreak) {
       case 1: shot1.play(); break;
       case 2: shot2.play(); break;
       case 3: shot3.play(); break;
       case 4: shot4.play(); break;
       case 5: shot5.play(); break;
-      default: shot5.play(); setWinStreak(0); break;
+      default: shot5.play(); break; // Ab streak reset nahi karna
     }
-  }, [winStreak, shot1, shot2, shot3, shot4, shot5]);
-
-  const toggleMusic = () => setIsMusicPlaying((s) => !s);
+  };
 
   // UI: simple controls to pick mode
   if (mode === "idle") {
